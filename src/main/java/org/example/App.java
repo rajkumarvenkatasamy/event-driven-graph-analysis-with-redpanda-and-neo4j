@@ -18,6 +18,7 @@ public class App {
     private static final String TOPIC = "movies-directed-by";
     private static final ObjectMapper objectMapper = new ObjectMapper();
     public static void main(String[] args)  {
+        // Set the properties for the Consumer
         Properties props = new Properties();
         props.put("bootstrap.servers", "localhost:9092");
         props.put("group.id", "test");
@@ -26,10 +27,16 @@ public class App {
         props.put("key.deserializer", "org.apache.kafka.common.serialization.StringDeserializer");
         props.put("value.deserializer", "org.apache.kafka.common.serialization.StringDeserializer");
         KafkaConsumer<String, String> consumer = new KafkaConsumer<>(props);
+        // Subscribe to a topic
         consumer.subscribe(Collections.singletonList(TOPIC));
 
+        // Establish a connection to the Neo4j database
         try (Driver driver = GraphDatabase.driver("bolt://localhost:7687", AuthTokens.basic("neo4j", "password"))) {
             while (true) {
+                // Consumer that polls for records from the subscribed topic
+                // The consumed messages are processed by extracting the values for the fields "movieId", "movieName",
+                // "directorName", and "year". These fields are then passed to createMovieDirectedBy method to
+                // make entries in the Neo4j graph database
                 ConsumerRecords<String, String> records = consumer.poll(Duration.ofMillis(100));
                 for (ConsumerRecord<String, String> record : records) {
                     JsonNode jsonNode = objectMapper.readTree(record.value());
@@ -45,6 +52,9 @@ public class App {
         }
     }
 
+    // createMovieDirectedBy method creates a new node for the Movie and also creates a new node for the Director.
+    // It then creates a relationship between the Director node and the Movie node with the label DIRECTED and a year
+    // property with the provided year value.
     private static void createMovieDirectedBy(Driver driver, String movieId, String movieName, String directorName, int year) {
         try (Session session = driver.session()) {
             session.writeTransaction(tx -> {
